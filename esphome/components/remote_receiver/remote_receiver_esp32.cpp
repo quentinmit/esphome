@@ -12,6 +12,7 @@ static const char *const TAG = "remote_receiver.esp32";
 void RemoteReceiverComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up Remote Receiver...");
   this->pin_->setup();
+  this->demod_threshold_ = this->from_microseconds_(this->demod_threshold_us_);
   rmt_config_t rmt{};
   this->config_rmt(rmt);
   rmt.gpio_num = gpio_num_t(this->pin_->get_pin());
@@ -106,6 +107,10 @@ void RemoteReceiverComponent::decode_rmt_(rmt_item32_t *item, size_t len) {
 
   this->temp_.reserve(item_count * 2);  // each RMT item has 2 pulses
   for (size_t i = 0; i < item_count; i++) {
+    if (item[i].level0 == 0 && item[i].duration0 < this->demod_threshold_) {
+      // Demod by treating short lows as highs
+      item[i].level0 = 1;
+    }
     if (item[i].duration0 == 0u) {
       // Do nothing
     } else if (bool(item[i].level0) == prev_level) {
@@ -122,6 +127,10 @@ void RemoteReceiverComponent::decode_rmt_(rmt_item32_t *item, size_t len) {
       prev_length = item[i].duration0;
     }
 
+    if (item[i].level1 == 0 && item[i].duration1 < this->demod_threshold_) {
+      // Demod by treating short lows as highs
+      item[i].level1 = 1;
+    }
     if (item[i].duration1 == 0u) {
       // Do nothing
     } else if (bool(item[i].level1) == prev_level) {

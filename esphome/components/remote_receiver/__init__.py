@@ -39,6 +39,9 @@ CONFIG_SCHEMA = remote_base.validate_triggers(
             cv.Optional(
                 CONF_IDLE, default="10ms"
             ): cv.positive_time_period_microseconds,
+            cv.Optional(
+                "demod_threshold", default="0"
+            ): cv.positive_time_period_microseconds,
             cv.Optional(CONF_MEMORY_BLOCKS, default=3): cv.Range(min=1, max=8),
         }
     ).extend(cv.COMPONENT_SCHEMA)
@@ -63,3 +66,4 @@ async def to_code(config):
     cg.add(var.set_buffer_size(config[CONF_BUFFER_SIZE]))
     cg.add(var.set_filter_us(config[CONF_FILTER]))
     cg.add(var.set_idle_us(config[CONF_IDLE]))
+    cg.add(var.set_demod_threshold_us(config["demod_threshold"]))
