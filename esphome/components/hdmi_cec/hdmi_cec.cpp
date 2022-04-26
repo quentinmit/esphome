@@ -16,6 +16,7 @@ void message_to_debug_string(char *message, const unsigned char *buffer, int cou
       sprintf(&(message[i * 3 + 2]), ":");
     }
   }
+  message[count*3] = 0;
 }
 
 void HdmiCec::on_ready_(int logical_address) {
@@ -31,7 +32,7 @@ void HdmiCec::on_ready_(int logical_address) {
 
 void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
   // No command received?
-  if (count < 2)
+  if (count < 1)
     return;
 
   auto source = (buffer[0] & 0xF0) >> 4;
@@ -51,18 +52,24 @@ void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
   ESP_LOGD(TAG, "RX: (%d->%d) %02X:%s", source, destination, ((source & 0x0f) << 4) | (destination & 0x0f),
            debug_message);
 
+  uint8_t opcode = 0;
+
+  if (count > 0) {
+    // Ping message has empty data.
+    opcode = buffer[0];
+  }
+
   // Handling the physical address response in code instead of yaml since I think it always
   // needs to happen for other devices to be able to talk to this device.
-  if (buffer[0] == 0x83 && destination == address_) {
+  if (count > 0 && opcode == 0x83 && destination == address_) {
     // Report physical address
     unsigned char buf[4] = {0x84, (unsigned char) (physical_address_ >> 8), (unsigned char) (physical_address_ & 0xff),
                             address_};
     this->send_data_internal_(this->address_, 0xF, buf, 4);
   }
 
-  uint8_t opcode = buffer[0];
   for (auto *trigger : this->triggers_) {
-    if ((!trigger->opcode_.has_value() || (*trigger->opcode_ == opcode)) &&
+    if ((!trigger->opcode_.has_value() || (count > 0 && *trigger->opcode_ == opcode)) &&
         (!trigger->source_.has_value() || (*trigger->source_ == source)) &&
         (!trigger->destination_.has_value() || (*trigger->destination_ == destination)) &&
         (!trigger->data_.has_value() ||
