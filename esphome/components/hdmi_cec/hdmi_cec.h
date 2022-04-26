@@ -8,7 +8,7 @@
 #include "esphome/core/optional.h"
 #include "esphome/core/log.h"
 
-#include <CEC_Device.h>
+#include "CEC_Device.h"
 
 #include <functional>
 
@@ -20,7 +20,16 @@ template<typename... Ts> class HdmiCecSendAction;
 
 static const uint8_t HDMI_CEC_MAX_DATA_LENGTH = 16;
 
-class HdmiCec : public Component, CEC_Device {
+struct HdmiCecStore {
+  CEC_Device cec_device_;
+  ISRInternalGPIOPin pin_;
+
+  unsigned long pin_interrupt_count_;
+
+  static void pin_interrupt(HdmiCecStore *arg);
+};
+
+class HdmiCec : public Component {
  public:
   HdmiCec(){};
   // Component overrides
@@ -29,14 +38,6 @@ class HdmiCec : public Component, CEC_Device {
   float get_setup_priority() const override { return setup_priority::HARDWARE; }
   void loop() override;
 
-  // CEC_Device overrides
-  bool LineState() override;                                                    // NOLINT(readability-identifier-naming)
-  void SetLineState(bool state) override;                                       // NOLINT(readability-identifier-naming)
-  void OnReady(int logical_address) override;                                   // NOLINT(readability-identifier-naming)
-  void OnReceiveComplete(unsigned char *buffer, int count, bool ack) override;  // NOLINT(readability-identifier-naming)
-  void OnTransmitComplete(unsigned char *buffer, int count,
-                          bool ack) override;  // NOLINT(readability-identifier-naming)
-
   void send_data(uint8_t source, uint8_t destination, const std::vector<uint8_t> &data);
   void set_address(uint8_t address) { this->address_ = address; }
   void set_physical_address(uint16_t physical_address) { this->physical_address_ = physical_address; }
@@ -44,23 +45,25 @@ class HdmiCec : public Component, CEC_Device {
   void set_pin(InternalGPIOPin *pin) {
     this->pin_ = pin;
     this->pin_->pin_mode(gpio::FLAG_INPUT);
+    this->store_.pin_ = this->pin_->to_isr();
   }
   void add_trigger(HdmiCecTrigger *trigger);
-  static void pin_interrupt(HdmiCec *arg);
 
  protected:
   void send_data_internal_(uint8_t source, uint8_t destination, unsigned char *buffer, int count);
 
   template<typename... Ts> friend class HdmiCecSendAction;
 
+  void on_ready_(int logical_address);
+  void on_receive_complete_(unsigned char *buffer, int count, bool ack);
+
   InternalGPIOPin *pin_;
   std::vector<HdmiCecTrigger *> triggers_{};
   uint8_t address_;
   uint16_t physical_address_;
   bool promiscuous_mode_;
-  HighFrequencyLoopRequester high_freq_;
-  // Used so that `pin_interrupt` doesn't fire when we're toggling the line
-  volatile boolean disable_line_interrupts_ = false;
+  bool ready_ = false;
+  HdmiCecStore store_{};
 };
 
 template<typename... Ts> class HdmiCecSendAction : public Action<Ts...>, public Parented<HdmiCec> {

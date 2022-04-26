@@ -18,20 +18,10 @@ void message_to_debug_string(char *message, const unsigned char *buffer, int cou
   }
 }
 
-bool HdmiCec::LineState() { return this->pin_->digital_read(); }
-
-void HdmiCec::SetLineState(bool state) {
-  if (state) {
-    this->pin_->pin_mode(gpio::FLAG_INPUT);
-  } else {
-    this->pin_->digital_write(false);
-    this->pin_->pin_mode(gpio::FLAG_OUTPUT);
-  }
-}
-
-void HdmiCec::OnReady(int logical_address) {
+void HdmiCec::on_ready_(int logical_address) {
   // This is called after the logical address has been allocated
   ESP_LOGD(TAG, "Device ready, Logical address assigned: %d", logical_address);
+  this->ready_ = true;
   this->address_ = logical_address;
   // Report physical address
   unsigned char buf[4] = {0x84, (unsigned char) (physical_address_ >> 8), (unsigned char) (physical_address_ & 0xff),
@@ -39,7 +29,7 @@ void HdmiCec::OnReady(int logical_address) {
   this->send_data_internal_(this->address_, 0xF, buf, 4);
 }
 
-void HdmiCec::OnReceiveComplete(unsigned char *buffer, int count, bool ack) {
+void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
   // No command received?
   if (count < 2)
     return;
@@ -83,24 +73,28 @@ void HdmiCec::OnReceiveComplete(unsigned char *buffer, int count, bool ack) {
   }
 }
 
-void HdmiCec::OnTransmitComplete(unsigned char *buffer, int count, bool ack) {}
-
-void IRAM_ATTR HOT HdmiCec::pin_interrupt(HdmiCec *arg) {
-  if (arg->disable_line_interrupts_)
-    return;
-  arg->Run();
+void IRAM_ATTR HOT HdmiCecStore::pin_interrupt(HdmiCecStore *arg) {
+  arg->pin_interrupt_count_++;
+  bool currentLineState = arg->pin_.digital_read();
+  unsigned long time = micros();
+  arg->cec_device_.Run(time, currentLineState);
+  return;
+  if (arg->cec_device_.DesiredLineState()) {
+    arg->pin_.pin_mode(gpio::FLAG_INPUT);
+  } else {
+    arg->pin_.digital_write(false);
+    arg->pin_.pin_mode(gpio::FLAG_OUTPUT);
+  }
+  //if (arg->cec_device_._waitTime > 0) {
+    // schedule another call to Run in waitTime
+  //}
 }
 
 void HdmiCec::setup() {
-  this->high_freq_.start();
-
   ESP_LOGCONFIG(TAG, "Setting up HDMI-CEC...");
-  this->Initialize(0x2000, CEC_Device::CDT_AUDIO_SYSTEM, true);
+  this->store_.cec_device_.Initialize(0x2000, CEC_Device::CDT_AUDIO_SYSTEM, true);
 
-  // This isn't quite enough to allow us to get rid of the HighFrequencyLoopRequester.
-  // There's probably something that needs to wait a certain amount of time after
-  // an interrupt.
-  this->pin_->attach_interrupt(HdmiCec::pin_interrupt, this, gpio::INTERRUPT_ANY_EDGE);
+  this->pin_->attach_interrupt(HdmiCecStore::pin_interrupt, &this->store_, gpio::INTERRUPT_ANY_EDGE);
 }
 
 void HdmiCec::dump_config() {
@@ -122,15 +116,28 @@ void HdmiCec::send_data_internal_(uint8_t source, uint8_t destination, unsigned 
   ESP_LOGD(TAG, "TX: (%d->%d) %02X:%s", source, destination, ((source & 0x0f) << 4) | (destination & 0x0f),
            debug_message);
 
-  this->TransmitFrame(destination, buffer, count);
+  this->store_.cec_device_.TransmitFrame(destination, buffer, count);
 }
 
 void HdmiCec::add_trigger(HdmiCecTrigger *trigger) { this->triggers_.push_back(trigger); };
 
 void HdmiCec::loop() {
-  this->disable_line_interrupts_ = true;
-  this->Run();
-  this->disable_line_interrupts_ = false;
+  // All the work is done by the ISRs, but we need to process the packets here.
+
+  if (0&&this->store_.cec_device_._state != 0) {
+    ESP_LOGD(TAG, "Current state: %d interrupts %ld", this->store_.cec_device_._state, this->store_.pin_interrupt_count_);
+  }
+
+  if (!this->ready_ && this->store_.cec_device_.LogicalAddress() > 0) {
+    this->on_ready_(this->store_.cec_device_.LogicalAddress());
+  }
+
+  unsigned char buffer[16];
+  int count = 16;
+  bool ack;
+  if (this->store_.cec_device_.ReceivedPacket(buffer, &count, &ack)) {
+    this->on_receive_complete_(buffer, count, ack);
+  }
 
   // The current implementation of CEC is inefficient and relies on polling to
   // identify signal changes at just the right time. Experimentally it needs to
