@@ -366,7 +366,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 	_lastLineState = currentLineState;
 }
 
-bool CEC_Device::Transmit(int sourceAddress, int targetAddress, const unsigned char* buffer, unsigned int count)
+bool IRAM_ATTR CEC_Device::Transmit(int sourceAddress, int targetAddress, const unsigned char* buffer, unsigned int count)
 {
 	if (_monitorMode)
 		return false; // we must not transmit in monitor mode

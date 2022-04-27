@@ -1,8 +1,11 @@
 #ifdef USE_ARDUINO
 
+#include <esp_spi_flash.h>
 #include "hdmi_cec.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
+
+
 
 namespace esphome {
 namespace hdmi_cec {
@@ -81,6 +84,10 @@ void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
 }
 
 void IRAM_ATTR HOT HdmiCecStore::pin_interrupt(HdmiCecStore *arg) {
+  if (!spi_flash_cache_enabled()) {
+    // This interrupt handler is not safe if the cache is disabled.
+    return;
+  }
   arg->pin_interrupt_count_++;
   bool currentLineState = arg->pin_.digital_read();
   unsigned long time = micros();
@@ -131,9 +138,9 @@ void HdmiCec::add_trigger(HdmiCecTrigger *trigger) { this->triggers_.push_back(t
 void HdmiCec::loop() {
   // All the work is done by the ISRs, but we need to process the packets here.
 
-  if (0&&this->store_.cec_device_._state != 0) {
-    ESP_LOGD(TAG, "Current state: %d interrupts %ld", this->store_.cec_device_._state, this->store_.pin_interrupt_count_);
-  }
+  // if (1||this->store_.cec_device_._state != 0) {
+  //   ESP_LOGD(TAG, "Current state: %d interrupts %ld", this->store_.cec_device_._state, this->store_.pin_interrupt_count_);
+  // }
 
   if (!this->ready_ && this->store_.cec_device_.LogicalAddress() > 0) {
     this->on_ready_(this->store_.cec_device_.LogicalAddress());
