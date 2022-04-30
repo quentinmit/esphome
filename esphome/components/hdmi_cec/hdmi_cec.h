@@ -24,6 +24,7 @@ struct HdmiCecStore {
   CEC_Device cec_device_;
   ISRInternalGPIOPin pin_;
 
+  bool _desired_line_state;
   unsigned long pin_interrupt_count_;
 
   static void pin_interrupt(HdmiCecStore *arg);

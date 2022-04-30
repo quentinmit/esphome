@@ -103,6 +103,12 @@ async def to_code(config):
 
     await cg.register_component(var, config)
 
+    # GCC places jump tables in flash, even for functions with IRAM_ATTR.
+    # Until that is fixed, disable jump tables.
+    # See https://github.com/espressif/esp-idf/issues/1552
+    cg.add_build_flag("-fno-jump-tables")
+    cg.add_build_flag("-fno-tree-switch-conversion")
+
     cg.add(var.set_address([config[CONF_ADDRESS]]))
     cg.add(var.set_physical_address([config[CONF_PHYSICAL_ADDRESS]]))
     cg.add(var.set_promiscuous_mode([config[CONF_PROMISCUOUS_MODE]]))

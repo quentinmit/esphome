@@ -1,11 +1,8 @@
 #ifdef USE_ARDUINO
 
-#include <esp_spi_flash.h>
 #include "hdmi_cec.h"
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
-
-
 
 namespace esphome {
 namespace hdmi_cec {
@@ -84,14 +81,11 @@ void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
 }
 
 void IRAM_ATTR HOT HdmiCecStore::pin_interrupt(HdmiCecStore *arg) {
-  if (!spi_flash_cache_enabled()) {
-    // This interrupt handler is not safe if the cache is disabled.
-    return;
-  }
   arg->pin_interrupt_count_++;
   bool currentLineState = arg->pin_.digital_read();
   unsigned long time = micros();
   arg->cec_device_.Run(time, currentLineState);
+  arg->_desired_line_state = arg->cec_device_.DesiredLineState();
   return;
   if (arg->cec_device_.DesiredLineState()) {
     arg->pin_.pin_mode(gpio::FLAG_INPUT);
@@ -161,6 +155,7 @@ void HdmiCec::loop() {
   static int timer = 0;
   if (millis() - timer > 10000) {
     ESP_LOGD(TAG, "Ran %d times in 10000ms (every %fms)", counter, 10000.0f / (float) counter);
+    ESP_LOGD(TAG, "Current state: %d interrupts %ld desired line state %d", this->store_.cec_device_._state, this->store_.pin_interrupt_count_, this->store_._desired_line_state);
     counter = 0;
     timer = millis();
   }
