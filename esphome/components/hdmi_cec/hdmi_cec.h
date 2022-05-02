@@ -23,6 +23,7 @@ static const uint8_t HDMI_CEC_MAX_DATA_LENGTH = 16;
 struct HdmiCecStore {
   CEC_Device cec_device_;
   ISRInternalGPIOPin pin_;
+  uint8_t pin_number_;
 
   bool _desired_line_state;
   unsigned long pin_interrupt_count_;
@@ -43,10 +44,11 @@ class HdmiCec : public Component {
   void set_address(uint8_t address) { this->address_ = address; }
   void set_physical_address(uint16_t physical_address) { this->physical_address_ = physical_address; }
   void set_promiscuous_mode(uint16_t promiscuous_mode) { this->promiscuous_mode_ = promiscuous_mode; }
-  void set_pin(InternalGPIOPin *pin) {
+  void set_pin(InternalGPIOPin *pin, uint8_t pin_number) {
     this->pin_ = pin;
     this->pin_->pin_mode(gpio::FLAG_INPUT);
     this->store_.pin_ = this->pin_->to_isr();
+    this->store_.pin_number_ = pin_number;
   }
   void add_trigger(HdmiCecTrigger *trigger);
 

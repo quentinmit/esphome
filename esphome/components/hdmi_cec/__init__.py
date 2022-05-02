@@ -112,8 +112,9 @@ async def to_code(config):
     cg.add(var.set_address([config[CONF_ADDRESS]]))
     cg.add(var.set_physical_address([config[CONF_PHYSICAL_ADDRESS]]))
     cg.add(var.set_promiscuous_mode([config[CONF_PROMISCUOUS_MODE]]))
-    pin = await cg.gpio_pin_expression(config[CONF_PIN])
-    cg.add(var.set_pin(pin))
+    pin = config[CONF_PIN]
+    pin_expr = await cg.gpio_pin_expression(pin)
+    cg.add(var.set_pin(pin_expr, pin["number"]))
 
     for conf in config.get(CONF_ON_MESSAGE, []):
         trigger = cg.new_Pvariable(conf[CONF_TRIGGER_ID], var)

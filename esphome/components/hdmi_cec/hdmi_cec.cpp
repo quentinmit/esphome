@@ -4,6 +4,8 @@
 #include "esphome/core/log.h"
 #include "esphome/core/hal.h"
 
+#include "soc/gpio_struct.h"
+
 namespace esphome {
 namespace hdmi_cec {
 
@@ -86,12 +88,26 @@ void IRAM_ATTR HOT HdmiCecStore::pin_interrupt(HdmiCecStore *arg) {
   unsigned long time = micros();
   arg->cec_device_.Run(time, currentLineState);
   arg->_desired_line_state = arg->cec_device_.DesiredLineState();
-  return;
+  // TODO: Switch to pin_mode when it works.
+  // pin_mode also disables pin interrupts as a side effect (!)
+  // And we can't re-enable them because attach_interrupt is not IRAM_ATTR
+  // See https://github.com/espressif/arduino-esp32/issues/6669
+  uint8_t pin = arg->pin_number_;
   if (arg->cec_device_.DesiredLineState()) {
-    arg->pin_.pin_mode(gpio::FLAG_INPUT);
+    if(pin < 32) {
+      GPIO.enable_w1tc = ((uint32_t)1 << pin);
+    } else {
+      GPIO.enable1_w1tc.val = ((uint32_t)1 << (pin - 32));
+    }
+    //arg->pin_.pin_mode(gpio::FLAG_INPUT);
   } else {
     arg->pin_.digital_write(false);
-    arg->pin_.pin_mode(gpio::FLAG_OUTPUT);
+    if(pin < 32) {
+      GPIO.enable_w1ts = ((uint32_t)1 << pin);
+    } else {
+      GPIO.enable1_w1ts.val = ((uint32_t)1 << (pin - 32));
+    }
+    //arg->pin_.pin_mode(gpio::FLAG_OUTPUT);
   }
   //if (arg->cec_device_._waitTime > 0) {
     // schedule another call to Run in waitTime
