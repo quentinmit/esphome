@@ -68,6 +68,13 @@ public:
   }
 
   bool IRAM_ATTR DesiredLineState() { return _lineSetState; }
+  unsigned long IRAM_ATTR WaitTime(unsigned long time) {
+    if (time > (_lineSetTime + _waitTime)) {
+      return 0;
+    } else {
+      return _waitTime - (time - _lineSetTime);
+    }
+  }
 
 private:
 	// Receive buffer

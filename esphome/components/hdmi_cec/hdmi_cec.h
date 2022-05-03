@@ -12,6 +12,16 @@
 
 #include <functional>
 
+#ifdef USE_ESP32
+#include "driver/timer.h"
+#endif
+
+typedef struct hw_timer_s
+{
+  uint8_t group;
+  uint8_t num;
+} hw_timer_t;
+
 namespace esphome {
 namespace hdmi_cec {
 
@@ -24,11 +34,19 @@ struct HdmiCecStore {
   CEC_Device cec_device_;
   ISRInternalGPIOPin pin_;
   uint8_t pin_number_;
+#ifdef USE_ESP32
+  timer_group_t timer_group;
+  timer_idx_t timer_idx;
+#endif
 
-  bool _desired_line_state;
+  bool desired_line_state_;
+  unsigned long low_count_ = 0;
   unsigned long pin_interrupt_count_;
+  unsigned long timer_interrupt_count_;
 
   static void pin_interrupt(HdmiCecStore *arg);
+  static void timer_interrupt(HdmiCecStore *arg);
+  void interrupt_();
 };
 
 class HdmiCec : public Component {

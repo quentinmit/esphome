@@ -5,6 +5,8 @@
 #include "esphome/core/hal.h"
 
 #include "soc/gpio_struct.h"
+#include "driver/timer.h"
+#include "esp32-hal-cpu.h"
 
 namespace esphome {
 namespace hdmi_cec {
@@ -84,41 +86,82 @@ void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
 
 void IRAM_ATTR HOT HdmiCecStore::pin_interrupt(HdmiCecStore *arg) {
   arg->pin_interrupt_count_++;
-  bool currentLineState = arg->pin_.digital_read();
+  arg->interrupt_();
+}
+
+void IRAM_ATTR HOT HdmiCecStore::timer_interrupt(HdmiCecStore *arg) {
+  arg->timer_interrupt_count_++;
+  arg->interrupt_();
+}
+
+void IRAM_ATTR HOT HdmiCecStore::interrupt_() {
+  bool currentLineState = pin_.digital_read();
   unsigned long time = micros();
-  arg->cec_device_.Run(time, currentLineState);
-  arg->_desired_line_state = arg->cec_device_.DesiredLineState();
+  cec_device_.Run(time, currentLineState);
+  desired_line_state_ = cec_device_.DesiredLineState();
   // TODO: Switch to pin_mode when it works.
   // pin_mode also disables pin interrupts as a side effect (!)
   // And we can't re-enable them because attach_interrupt is not IRAM_ATTR
   // See https://github.com/espressif/arduino-esp32/issues/6669
-  uint8_t pin = arg->pin_number_;
-  if (arg->cec_device_.DesiredLineState()) {
+  uint8_t pin = pin_number_;
+  pin_.digital_write(cec_device_.DesiredLineState());
+  if (!desired_line_state_) {
+    low_count_++;
+  }
+  unsigned long waitTime = cec_device_.WaitTime(time);
+  if (waitTime == 0) {
+    // Wake up every 10ms regardless.
+    waitTime = 10000;
+  }
+  timer_group_set_alarm_value_in_isr(timer_group, timer_idx, waitTime);
+  return;
+  if (cec_device_.DesiredLineState()) {
     if(pin < 32) {
       GPIO.enable_w1tc = ((uint32_t)1 << pin);
     } else {
       GPIO.enable1_w1tc.val = ((uint32_t)1 << (pin - 32));
     }
-    //arg->pin_.pin_mode(gpio::FLAG_INPUT);
+    //pin_.pin_mode(gpio::FLAG_INPUT);
   } else {
-    arg->pin_.digital_write(false);
+    pin_.digital_write(false);
     if(pin < 32) {
       GPIO.enable_w1ts = ((uint32_t)1 << pin);
     } else {
       GPIO.enable1_w1ts.val = ((uint32_t)1 << (pin - 32));
     }
-    //arg->pin_.pin_mode(gpio::FLAG_OUTPUT);
+    //pin_.pin_mode(gpio::FLAG_OUTPUT);
   }
-  //if (arg->cec_device_._waitTime > 0) {
-    // schedule another call to Run in waitTime
-  //}
 }
 
 void HdmiCec::setup() {
   ESP_LOGCONFIG(TAG, "Setting up HDMI-CEC...");
   this->store_.cec_device_.Initialize(0x2000, CEC_Device::CDT_AUDIO_SYSTEM, true);
 
+  this->pin_->digital_write(true);
+  this->pin_->pin_mode(gpio::FLAG_OUTPUT | gpio::FLAG_OPEN_DRAIN);
   this->pin_->attach_interrupt(HdmiCecStore::pin_interrupt, &this->store_, gpio::INTERRUPT_ANY_EDGE);
+
+  store_.timer_group = TIMER_GROUP_0;
+  store_.timer_idx = TIMER_0;
+
+  uint32_t div = getApbFrequency() / 1000000; // 1 µs ticks
+
+  ESP_LOGCONFIG(TAG, "HDMI-CEC using %ld divisor", div);
+
+  timer_config_t config = {
+    .alarm_en = TIMER_ALARM_EN,
+    .counter_en = TIMER_PAUSE,
+    .intr_type = TIMER_INTR_LEVEL,
+    .counter_dir = TIMER_COUNT_UP,
+    .auto_reload = TIMER_AUTORELOAD_EN,
+    .divider = div,
+  };
+  timer_init(store_.timer_group, store_.timer_idx, &config);
+  timer_set_counter_value(store_.timer_group, store_.timer_idx, 0);
+  timer_isr_callback_add(store_.timer_group, store_.timer_idx, (timer_isr_t)&HdmiCecStore::timer_interrupt, &this->store_, 0);
+  // Wake up every 500us.
+  timer_set_alarm_value(store_.timer_group, store_.timer_idx, 500);
+  timer_start(store_.timer_group, store_.timer_idx);
 }
 
 void HdmiCec::dump_config() {
@@ -169,9 +212,14 @@ void HdmiCec::loop() {
   // an interrupt-driven CEC driver.
   static int counter = 0;
   static int timer = 0;
-  if (millis() - timer > 10000) {
+  uint64_t alarm;
+  timer_get_alarm_value(this->store_.timer_group, this->store_.timer_idx, &alarm);
+  if (millis() - timer > 10000 || alarm != 10000) {
     ESP_LOGD(TAG, "Ran %d times in 10000ms (every %fms)", counter, 10000.0f / (float) counter);
-    ESP_LOGD(TAG, "Current state: %d interrupts %ld desired line state %d", this->store_.cec_device_._state, this->store_.pin_interrupt_count_, this->store_._desired_line_state);
+    ESP_LOGD(TAG, "Current state: %d interrupts pin %ld timer %ld desired line state %d low count %d", this->store_.cec_device_._state, this->store_.pin_interrupt_count_, this->store_.timer_interrupt_count_, this->store_.desired_line_state_, this->store_.low_count_);
+    timer_config_t config;
+    timer_get_config(this->store_.timer_group, this->store_.timer_idx, &config);
+    ESP_LOGD(TAG, "Timer divider %ld alarm %lld", config.divider, alarm);
     counter = 0;
     timer = millis();
   }

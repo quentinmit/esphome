@@ -44,7 +44,13 @@ CONFIG_SCHEMA = cv.All(
                 min=0, max=0xFFFE
             ),
             cv.Optional(CONF_PROMISCUOUS_MODE, default=False): cv.boolean,
-            cv.Required(CONF_PIN): pins.internal_gpio_output_pin_schema,
+            cv.Required(CONF_PIN): pins.gpio_pin_schema(
+                {
+                    pins.CONF_OUTPUT: True,
+                    pins.CONF_OPEN_DRAIN: True,
+                },
+                internal=True,
+            ),
             cv.Optional(CONF_ON_MESSAGE): automation.validate_automation(
                 {
                     cv.GenerateID(CONF_TRIGGER_ID): cv.declare_id(HdmiCecTrigger),
