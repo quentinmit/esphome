@@ -53,7 +53,7 @@ void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
 
   char debug_message[HDMI_CEC_MAX_DATA_LENGTH * 3];
   message_to_debug_string(debug_message, buffer, count);
-  ESP_LOGD(TAG, "RX: (%d->%d) %02X:%s", source, destination, ((source & 0x0f) << 4) | (destination & 0x0f),
+  ESP_LOGD(TAG, "RX: ack %d (%d->%d) %02X:%s", ack, source, destination, ((source & 0x0f) << 4) | (destination & 0x0f),
            debug_message);
 
   uint8_t opcode = 0;

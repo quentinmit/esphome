@@ -57,11 +57,11 @@ public:
 	int LogicalAddress() { return _logicalAddress; }
   bool ReceivedPacket(unsigned char* buffer, int* count, bool* ack) {
     if (_receiveComplete) {
-      _receiveComplete = false;
       int bufferSize = *count;
-      *count = _receiveBufferBits >> 3;
-      memcpy(buffer, &_receiveBuffer, std::min(bufferSize, *count));
-      *ack = _ack;
+      *count = _receiveCompleteCount;
+      memcpy(buffer, &_receiveCompleteBuffer, std::min(bufferSize, *count));
+      *ack = _receiveCompleteAck;
+      _receiveComplete = false;
       return true;
     }
     return false;
@@ -78,8 +78,25 @@ public:
 
 private:
 	// Receive buffer
-	unsigned char _receiveBuffer[16];
+	unsigned char _receiveBuffers[2][16];
+  unsigned char _activeReceiveBuffer = 0;
 	unsigned int _receiveBufferBits;
+
+  void IRAM_ATTR OnReceiveComplete() {
+    if (_receiveComplete) {
+      // Already have a pending packet, drop this one.
+      return;
+    }
+    _receiveCompleteBuffer = _receiveBuffers[_activeReceiveBuffer];
+    _receiveCompleteCount = _receiveBufferBits >> 3;
+    _receiveCompleteAck = _ack;
+    _receiveComplete = true;
+    _activeReceiveBuffer = 1-_activeReceiveBuffer;
+  }
+
+  unsigned char* _receiveCompleteBuffer;
+  unsigned int _receiveCompleteCount;
+  bool _receiveCompleteAck;
   volatile bool _receiveComplete = false;
 
 	// Transmit buffer

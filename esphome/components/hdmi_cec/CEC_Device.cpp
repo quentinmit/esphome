@@ -151,16 +151,15 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 			if (_eom || !_ack) {
 				// We're not going to receive anything more from the initiator.
 				// Go back to the IDLE state and wait for another start bit or start pending transmit.
-        _receiveComplete = true;
-				//OnReceiveComplete(_receiveBuffer, _receiveBufferBits >> 3, _ack);
+				OnReceiveComplete();
 				_state = CEC_IDLE;
 				break;
 			}
 		} else {
 			// Save the received bit
 			unsigned int idx = _receiveBufferBits >> 3;
-			if (idx < sizeof(_receiveBuffer)) {
-				_receiveBuffer[idx] = (_receiveBuffer[idx] << 1) | bit;
+			if (idx < sizeof(_receiveBuffers[0])) {
+				_receiveBuffers[_activeReceiveBuffer][idx] = (_receiveBuffers[_activeReceiveBuffer][idx] << 1) | bit;
 				_receiveBufferBits++;
 			}
 		}
@@ -185,7 +184,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 
 				// Check to see if the frame is addressed to us
 				// or if we are in promiscuous mode (in which case we'll receive everything)
-				int address = _receiveBuffer[0] & 0x0f;
+				int address = _receiveBuffers[_activeReceiveBuffer][0] & 0x0f;
 				if (address == 0x0f)
 					_broadcast = true;
 				else if (address == _logicalAddress)
@@ -234,8 +233,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 			// We're not going to receive anything more from the initiator (EOM has been received)
 			// or we've sent the NAK for the most recent bit. Therefore this message is all done.
 			// Go back to CEC_IDLE to wait for a valid start bit or start pending transmit
-      _receiveComplete = true;
-			//OnReceiveComplete(_receiveBuffer, _receiveBufferBits >> 3, _ack);
+			OnReceiveComplete();
 			_state = CEC_IDLE;
 			break;
 		}
