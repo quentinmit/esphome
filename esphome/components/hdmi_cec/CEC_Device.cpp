@@ -70,6 +70,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 		_state = CEC_IDLE;
 
 	bool bit;
+  unsigned int lastWaitTime = _waitTime;
 	_waitTime = 0;
 	switch (_state) {
 	case CEC_IDLE:
@@ -271,7 +272,8 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
     _lineSetState = 1;
 		currentLineState = 1;
 		_lineSetTime = time;
-		_waitTime = (_state == CEC_XMIT_STARTBIT1) ? STARTBIT_TIME : BIT_TIME;
+    // BIT_TIME and STARTBIT_TIME include the time spent low.
+		_waitTime = ((_state == CEC_XMIT_STARTBIT1) ? STARTBIT_TIME : BIT_TIME) - lastWaitTime;
 		_state = (CEC_STATE)(_state + 1);
 		break;
 
@@ -306,7 +308,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
     _lineSetState = 1; // Maybe follower pulls low for ACK
 		currentLineState = 1;
 		_lineSetTime = time;
-		_waitTime = BIT_TIME_SAMPLE;
+		_waitTime = BIT_TIME_SAMPLE-BIT_TIME_LOW_1;
 		_state = CEC_XMIT_ACK_TEST;
 		break;
 
