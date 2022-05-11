@@ -79,7 +79,7 @@ void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
         (!trigger->data_.has_value() ||
          (count == trigger->data_->size() && std::equal(trigger->data_->begin(), trigger->data_->end(), buffer)))) {
       auto data_vec = std::vector<uint8_t>(buffer, buffer + count);
-      trigger->trigger(source, destination, data_vec);
+      trigger->trigger(source, destination, data_vec, ack);
     }
   }
 }

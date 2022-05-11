@@ -118,7 +118,7 @@ template<typename... Ts> class HdmiCecSendAction : public Action<Ts...>, public 
   std::vector<uint8_t> data_static_{};
 };
 
-class HdmiCecTrigger : public Trigger<uint8_t, uint8_t, std::vector<uint8_t>>, public Component {
+class HdmiCecTrigger : public Trigger<uint8_t, uint8_t, std::vector<uint8_t>, bool>, public Component {
   friend class HdmiCec;
 
  public:

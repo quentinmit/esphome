@@ -146,6 +146,7 @@ async def to_code(config):
                 (cg.uint8, "source"),
                 (cg.uint8, "destination"),
                 (cg.std_vector.template(cg.uint8), "data"),
+                (cg.bool_, "ack"),
             ],
             conf,
         )
