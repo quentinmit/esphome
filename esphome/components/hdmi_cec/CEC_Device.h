@@ -59,7 +59,7 @@ public:
     if (_receiveComplete) {
       int bufferSize = *count;
       *count = _receiveCompleteCount;
-      memcpy(buffer, &_receiveCompleteBuffer, std::min(bufferSize, *count));
+      memcpy(buffer, _receiveCompleteBuffer, std::min(bufferSize, *count));
       *ack = _receiveCompleteAck;
       _receiveComplete = false;
       return true;
