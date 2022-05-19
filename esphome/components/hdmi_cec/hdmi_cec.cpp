@@ -227,13 +227,13 @@ void HdmiCec::loop() {
   // an interrupt-driven CEC driver.
   static int counter = 0;
   static int timer = 0;
-  uint64_t alarm;
-  timer_get_alarm_value(this->store_.timer_group, this->store_.timer_idx, &alarm);
-  if (millis() - timer > 10000 || alarm != 10000) {
+  if (millis() - timer > 10000) {
     ESP_LOGD(TAG, "Ran %d times in 10000ms (every %fms)", counter, 10000.0f / (float) counter);
     ESP_LOGD(TAG, "Current state: %d interrupts pin %ld timer %ld desired line state %d low count %d", this->store_.cec_device_._state, this->store_.pin_interrupt_count_, this->store_.timer_interrupt_count_, this->store_.desired_line_state_, this->store_.low_count_);
     timer_config_t config;
     timer_get_config(this->store_.timer_group, this->store_.timer_idx, &config);
+    uint64_t alarm;
+    timer_get_alarm_value(this->store_.timer_group, this->store_.timer_idx, &alarm);
     ESP_LOGD(TAG, "Timer divider %ld alarm %lld", config.divider, alarm);
     counter = 0;
     timer = millis();
