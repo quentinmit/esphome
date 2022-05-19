@@ -76,6 +76,7 @@ class HdmiCec : public Component {
   template<typename... Ts> friend class HdmiCecSendAction;
 
   void on_ready_(int logical_address);
+  void on_transmit_complete_(unsigned char *buffer, int count, bool ack);
   void on_receive_complete_(unsigned char *buffer, int count, bool ack);
 
   InternalGPIOPin *pin_;

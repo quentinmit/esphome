@@ -66,6 +66,17 @@ public:
     }
     return false;
   }
+  bool TransmittedPacket(unsigned char* buffer, int* count, bool* ack) {
+    if (_transmitComplete) {
+      _transmitComplete = false;
+      int bufferSize = *count;
+      *count = _transmitCompleteCount;
+      memcpy(buffer, &_transmitBuffer, std::min(bufferSize, *count));
+      *ack = _transmitCompleteAck;
+      return true;
+    }
+    return false;
+  }
 
   bool IRAM_ATTR DesiredLineState() { return _lineSetState; }
   unsigned long IRAM_ATTR WaitTime(unsigned long time) {
@@ -103,7 +114,15 @@ private:
 	unsigned char _transmitBuffer[16];
 	unsigned int _transmitBufferBytes;
 	unsigned int _transmitBufferBitIdx;
-  bool _transmitComplete = true;
+
+  void IRAM_ATTR OnTransmitComplete(bool ack) {
+    _transmitCompleteCount = _transmitBufferBitIdx >> 3;
+    _transmitCompleteAck = ack;
+    _transmitComplete = true;
+  }
+  unsigned int _transmitCompleteCount;
+  bool _transmitCompleteAck = false;
+  volatile bool _transmitComplete = true;
 
 	// State machine
 	typedef enum {

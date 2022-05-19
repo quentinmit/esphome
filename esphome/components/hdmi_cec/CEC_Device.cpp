@@ -313,8 +313,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 	case CEC_XMIT_ACK_TEST:
 		if ((currentLineState != 0) != _broadcast) {
 			// Not being acknowledged
-      _transmitComplete = true;
-			//OnTransmitComplete(_transmitBuffer, _transmitBufferBitIdx >> 3, false);
+      OnTransmitComplete(false);
 
 			// Normally we retransmit.  But this is NOT the case for <Polling Message> as its
 			// function is basically to 'ping' a logical address in which case we just want
@@ -334,8 +333,7 @@ void IRAM_ATTR CEC_Device::Run(unsigned long time, bool currentLineState)
 		if (_eom) {
 			// Nothing left to transmit, go back to idle
 			_transmitBufferBytes = 0;
-      _transmitComplete = true;
-			//OnTransmitComplete(_transmitBuffer, _transmitBufferBitIdx >> 3, true);
+      OnTransmitComplete(true);
 
 			if (_logicalAddress < 0) {
 				// Someone is there, try to allocate the next possible logical address

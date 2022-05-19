@@ -34,6 +34,17 @@ void HdmiCec::on_ready_(int logical_address) {
   this->send_data_internal_(this->address_, 0xF, buf, 4);
 }
 
+void HdmiCec::on_transmit_complete_(unsigned char *buffer, int count, bool ack) {
+  if (count < 1)
+    return;
+
+  auto source = (buffer[0] & 0xF0) >> 4;
+  auto destination = (buffer[0] & 0x0F);
+  char debug_message[(HDMI_CEC_MAX_DATA_LENGTH+1) * 3];
+  message_to_debug_string(debug_message, buffer, count);
+  ESP_LOGD(TAG, "TX complete: ack %d (%d->%d) %s", ack, source, destination, debug_message);
+}
+
 void HdmiCec::on_receive_complete_(unsigned char *buffer, int count, bool ack) {
   // No command received?
   if (count < 1)
@@ -204,6 +215,10 @@ void HdmiCec::loop() {
   bool ack;
   if (this->store_.cec_device_.ReceivedPacket(buffer, &count, &ack)) {
     this->on_receive_complete_(buffer, count, ack);
+  }
+  count = 16;
+  if (this->store_.cec_device_.TransmittedPacket(buffer, &count, &ack)) {
+    this->on_transmit_complete_(buffer, count, ack);
   }
 
   // The current implementation of CEC is inefficient and relies on polling to
